@@ -2,7 +2,7 @@
   "name": "PDF Gateway",
   "short_name": "PDF Gateway",
   "description": "Merge, split, edit, sign, fill, redact, compress, scan and protect PDFs — offline, private, Hindi-ready.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f3ef",

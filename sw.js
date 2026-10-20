@@ -1,5 +1,5 @@
 // PDF Gateway service worker — precaches the whole app so it works offline after the first visit.
-const VERSION = 'pdfgw-89cc9855de';
+const VERSION = 'pdfgw-47a7cf121a';
 const FILES = [
  "./",
  "css/app.css",
@@ -230,8 +230,18 @@ const FILES = [
  "vendor/wasm/quickjs-eval.js",
  "vendor/wasm/quickjs-eval.wasm"
 ];
+// Cloudflare (and some hosts) redirect /index.html -> /. A *redirected* response can't be served to a navigation
+// (browser shows ERR_FAILED), so always re-wrap it as a clean response.
+const clean = async res => {
+  if (!res || !res.redirected) return res;
+  const body = await res.blob();
+  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+};
+const put = async (c, req, res) => { if (res && res.ok) await c.put(req, await clean(res.clone())); };
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => Promise.all(FILES.map(f => c.add(new Request(f, { cache: 'reload' })).catch(() => {})))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => Promise.all(FILES.map(async f => {
+    try { await put(c, new Request(f), await fetch(new Request(f, { cache: 'reload' }))); } catch (_) {}
+  }))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('pdfgw-') && k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -241,8 +251,16 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // CDN (OCR engine) etc. are handled by the browser cache
-  e.respondWith(caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req).then(res => {
-    if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
-    return res;
-  }).catch(() => caches.match('./index.html'))));
+  const nav = req.mode === 'navigate';
+  e.respondWith((async () => {
+    const hit = await caches.match(nav ? './index.html' : req, { ignoreSearch: true });
+    if (hit) return hit;
+    try {
+      const res = await fetch(req);
+      if (res.ok && !nav) { const c = await caches.open(VERSION); await put(c, req, res); }
+      return await clean(res);
+    } catch (err) {
+      return (await caches.match('./index.html')) || Response.error();
+    }
+  })());
 });
