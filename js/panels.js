@@ -5,6 +5,7 @@ import { BASE_FONTS, userFonts } from './prims.js';
 import { buildPdf, buildToSize, renderPagesToImages, extractTextOf, download, zipFiles } from './export.js';
 import { createOcr } from './ocr.js';
 import { removePages } from './thumbs.js';
+import { offerShare } from './share.js';
 import { addFontFile, removeFont } from './fonts.js';
 import { $, $$, h, toast, busy, modal, confirmBox, baseName } from './ui.js';
 
@@ -100,6 +101,7 @@ export function initPanels() {
   $$('input[name=size]').forEach(r => r.addEventListener('change', () => { $('#targetBox').hidden = $('input[name=size]:checked').value !== 'target'; }));
   $('#exTarget').addEventListener('change', e => { $('#exCustomWrap').hidden = e.target.value !== 'custom'; });
   $('#btnSavePdf').onclick = () => savePdf();
+  $('#btnSharePdf').onclick = () => savePdf({ share: true });
   $('#btnSaveImg').onclick = saveImages; $('#btnSaveTxt').onclick = saveText;
   const md = { mdTitle: 'title', mdAuthor: 'author', mdSubject: 'subject', mdKeywords: 'keywords' };
   for (const [id, k] of Object.entries(md)) $('#' + id).addEventListener('input', e => { S.meta[k] = e.target.value; });
@@ -299,6 +301,7 @@ export async function savePdf(extra = {}) {
       const r = await buildToSize(o.target * 1024, { ...common, gray: o.gray, bw: o.bw });
       bytes = r.bytes; note = r.ok ? '' : ' — could not reach the target; this is the smallest possible';
     } else bytes = await buildPdf({ ...common, ocr, raster: !ocr && (o.gray || o.bw) ? { dpi: 200, quality: 0.9, gray: o.gray, bw: o.bw } : null });
+    if (extra.share) { busy(false); await offerShare(bytes, name + '.pdf'); return bytes; }
     download(bytes, name + '.pdf');
     toast(`Saved ${name}.pdf — ${fmtBytes(bytes.length)}${note}${o.protect ? ' · password protected' : ''}`, note ? 'warn' : 'ok', 6000);
     return bytes;

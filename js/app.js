@@ -96,7 +96,7 @@ function setView(v) {
   view = v;
   $('#home').hidden = v !== 'home'; $('#studio').hidden = v !== 'studio'; $('#scanner').hidden = v !== 'scanner';
   const ed = v === 'studio';
-  $('#btnSave').hidden = !ed; $('#btnUndo').hidden = $('#btnRedo').hidden = !ed; $('#btnHome').hidden = v === 'home'; $('#btnAdd').hidden = !ed;
+  $('#btnSave').hidden = !ed; $('#btnShare').hidden = !ed; $('#btnUndo').hidden = $('#btnRedo').hidden = !ed; $('#btnHome').hidden = v === 'home'; $('#btnAdd').hidden = !ed;
   document.querySelector('.top-actions .sep').hidden = !ed;
   window.scrollTo(0, 0);
 }
@@ -204,6 +204,7 @@ async function init() {
   $('#brandHome').onclick = e => { e.preventDefault(); showHome(); };
   $('#btnHome').onclick = showHome;
   $('#btnSave').onclick = () => savePdf();
+  $('#btnShare').onclick = () => savePdf({ share: true });
   $('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
   // stage bar
   $('#pgPrev').onclick = () => goto(S.cur - 1); $('#pgNext').onclick = () => goto(S.cur + 1);

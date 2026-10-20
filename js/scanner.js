@@ -6,6 +6,7 @@ import { defParams, buildScanSource, detectQuad, FILTERS } from './scan.js';
 import { openCropEditor } from './scan-editor.js';
 import { buildPdf, renderPagesToImages, zipFiles, download } from './export.js';
 import { createOcr } from './ocr.js';
+import { offerShare } from './share.js';
 import { P as PROJ, renameProject } from './projects.js';
 import { $, h, toast, busy, confirmBox, baseName } from './ui.js';
 
@@ -24,18 +25,45 @@ export function initScanner(h2) {
   $('#scSize').onchange = e => { cfg().size = e.target.value; applyPageSize(); emit('all'); };
   $('#scQual').onchange = e => { cfg().quality = e.target.value; };
   $('#scOcr').onchange = e => { cfg().ocr = e.target.checked; };
-  $('#scSavePdf').onclick = savePdf; $('#scSaveImg').onclick = saveImages; $('#scEditor').onclick = () => hooks.toEditor();
+  $('#scSavePdf').onclick = () => savePdf(); $('#scShare').onclick = () => savePdf(true); $('#scSaveImg').onclick = saveImages; $('#scEditor').onclick = () => hooks.toEditor();
   $('#scName').addEventListener('change', async e => { const v = e.target.value.trim() || 'Scan'; PROJ.name = v; if (PROJ.id) renameProject(PROJ.id, v); emit('meta'); });
   const fl = $('#scFilters');
   for (const [v, l] of FILTERS) fl.append(h('button', { 'data-f': v, onclick: () => filterAll(v) }, l));
   $('#scCropAll').onclick = () => cropAll();
   subscribe(() => { if (!$('#scanner').hidden) render(); });
+  initDock();
+}
+
+// The options panel can be dragged anywhere (position remembered) and collapsed.
+function initDock() {
+  const dock = $('#scDock'), grip = $('#scGrip');
+  let pos = { x: 0, y: 0 }, collapsed = false;
+  try { Object.assign(pos, JSON.parse(localStorage.getItem('pgDock') || '{}')); collapsed = localStorage.getItem('pgDockC') === '1'; } catch {}
+  const apply = () => {
+    const r = dock.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+    // keep the panel on screen: x moves horizontally (limited by its width), y is an upward offset from the bottom
+    const minY = -(H - r.height - 60) , maxY = 0;
+    pos.y = Math.max(minY, Math.min(maxY, pos.y)); pos.x = Math.max(-(W - Math.min(r.width, W)) , Math.min(W - Math.min(r.width, W), pos.x));
+    dock.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+    dock.classList.toggle('collapsed', collapsed);
+  };
+  const save = () => { try { localStorage.setItem('pgDock', JSON.stringify(pos)); localStorage.setItem('pgDockC', collapsed ? '1' : '0'); } catch {} };
+  let d = null;
+  grip.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; d = { x: e.clientX - pos.x, y: e.clientY - pos.y }; grip.setPointerCapture(e.pointerId); e.preventDefault(); });
+  grip.addEventListener('pointermove', e => { if (!d) return; pos.x = e.clientX - d.x; pos.y = e.clientY - d.y; apply(); });
+  const end = () => { if (d) { d = null; save(); } };
+  grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+  grip.addEventListener('dblclick', () => { pos = { x: 0, y: 0 }; apply(); save(); });
+  $('#scCollapse').onclick = () => { collapsed = !collapsed; apply(); save(); };
+  window.addEventListener('resize', apply);
+  window._dockApply = apply; apply();
 }
 
 export function showScanner() {
   $('#scName').value = PROJ.name || 'Scan';
   const c = cfg(); $('#scSize').value = c.size; $('#scQual').value = c.quality; $('#scOcr').checked = !!c.ocr;
   render();
+  window._dockApply?.();
 }
 
 // ---------------------------------------------------------------- page building
@@ -140,7 +168,7 @@ function render() {
   $('#scCount').textContent = n ? `${n} page${n > 1 ? 's' : ''}` : '';
   $('#scEmpty').hidden = n > 0; $('#scUndo').disabled = !S.hist.length;
   for (const b of $('#scFilters').children) b.classList.toggle('on', b.dataset.f === cfg().filter);
-  for (const id of ['scSavePdf', 'scSaveImg', 'scEditor', 'scCropAll']) $('#' + id).disabled = !n;
+  for (const id of ['scSavePdf', 'scShare', 'scSaveImg', 'scEditor', 'scCropAll']) $('#' + id).disabled = !n;
   S.pages.forEach((pg, i) => {
     const src = S.sources.get(pg.src?.sid);
     const rot = ((pg.rot % 360) + 360) % 360, swap = rot % 180;
@@ -159,7 +187,7 @@ function render() {
 
 // ---------------------------------------------------------------- saving
 const QUAL = { high: null, bal: { dpi: 150, quality: 0.72 }, small: { dpi: 110, quality: 0.5 } };
-async function savePdf() {
+async function savePdf(share = false) {
   if (!S.pages.length) return;
   const name = (PROJ.name || 'scan').replace(/[\\/:*?"<>|]+/g, '_'), c = cfg();
   let engine = null; busy('Preparing…', 0);
@@ -172,6 +200,7 @@ async function savePdf() {
       ocr = (cv, k) => { busy(`OCR page ${k + 1}/${idxs.length}…`, k / idxs.length); return engine.recognize(cv, name); };
     }
     const bytes = await buildPdf({ pages: idxs, raster: ocr ? null : QUAL[c.quality], ocr, progress: (m, f) => busy(m, f) });
+    if (share) { busy(false); await offerShare(bytes, name + '.pdf'); return; }
     download(bytes, name + '.pdf');
     toast(`Saved ${name}.pdf — ${(bytes.length / 1024).toFixed(bytes.length < 1e6 ? 0 : 0)} KB`, 'ok', 5000);
   } catch (e) { console.error(e); toast('Could not build the PDF: ' + (e?.message || e), 'error', 8000); } finally { engine?.close(); busy(false); }

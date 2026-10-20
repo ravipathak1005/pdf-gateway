@@ -35,6 +35,7 @@ const P = {
   zin: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5M8 11h6M11 8v6', zout: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5M8 11h6',
   left: 'M15 5l-7 7 7 7', right: 'M9 5l7 7-7 7', close: 'M6 6l12 12M18 6L6 18', camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 10a3.5 3.5 0 100 7 3.5 3.5 0 000-7z',
   filetext: 'M6 3h9l4 4v14H6zM9 12h7M9 16h7M9 8h3', images: 'M3 7h14v12H3zM7 7V5h14v12h-2', grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  share: 'M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 10.5l6.8-3.9M8.6 13.5l6.8 3.9',
   home: 'M4 11l8-7 8 7v9h-5v-6H9v6H4z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', wand: 'M5 19L16 8M15 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 12l.7 1.3L21 14l-1.3.7L19 16l-.7-1.3L17 14l1.3-.7z',
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5', up: 'M12 19V5M6 11l6-6 6 6', down: 'M12 5v14M6 13l6 6 6-6', font: 'M4 20l6-15 6 15M6.5 14h7M18 7v6M15 10h6',
   meta: 'M5 4h14v16H5zM8 8h8M8 12h5M8 16h3', reverse: 'M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4', zip: 'M6 3h9l4 4v14H6zM11 3v6M11 12h2M11 15h2M11 18h2',
