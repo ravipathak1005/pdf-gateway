@@ -25,6 +25,7 @@
     <span class="sep"></span>
     <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" data-ic="undo"></button>
     <button id="btnRedo" class="icon" title="Redo (Ctrl+Y)" aria-label="Redo" data-ic="redo"></button>
+    <button id="btnShare" class="ghost" data-ic="share" title="Share this PDF"><span>Share</span></button>
     <button id="btnSave" class="primary" data-ic="download"><span>Save PDF</span></button>
   </div>
 </header>
@@ -76,7 +77,9 @@
   </div>
   <div id="scEmpty" class="sc-empty"><b>Scan documents</b><p>Take photos or add pictures of pages. Each one is straightened and cleaned automatically; you can then fine-tune the crop and colour of any page.</p></div>
   <div id="scGrid" class="sc-grid"></div>
-  <div class="sc-dock">
+  <div class="sc-dock" id="scDock">
+    <div class="sc-grip" id="scGrip" title="Drag to move this panel · double-tap to reset"><i></i><span>Drag to move</span>
+      <button id="scCollapse" class="icon xs" title="Collapse / expand" aria-label="Collapse or expand options">▾</button></div>
     <div class="sc-row"><span class="lbl">Colour (all pages)</span><div id="scFilters" class="sc-filters"></div></div>
     <div class="sc-row">
       <label>Page size <select id="scSize"><option value="a4">A4 (fit)</option><option value="orig">As scanned</option></select></label>
@@ -85,6 +88,7 @@
     </div>
     <div class="sc-row sc-save">
       <button id="scSavePdf" class="primary" data-ic="download"><span>Save PDF</span></button>
+      <button id="scShare" data-ic="share"><span>Share PDF</span></button>
       <button id="scSaveImg" data-ic="images"><span>Save images</span></button>
       <button id="scEditor" data-ic="pen"><span>Open in editor</span></button>
     </div>
@@ -296,6 +300,7 @@
         </div>
       </details>
       <button id="btnSavePdf" class="primary wide" data-ic="download"><span>Save PDF</span></button>
+      <button id="btnSharePdf" class="wide" data-ic="share"><span>Share PDF…</span></button>
       <h3>Other formats</h3>
       <div class="inline-form">
         <select id="exImgFmt"><option value="png">PNG</option><option value="jpg">JPG</option></select>

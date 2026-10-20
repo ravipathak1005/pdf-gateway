@@ -1,5 +1,5 @@
 // PDF Gateway service worker — precaches the whole app so it works offline after the first visit.
-const VERSION = 'pdfgw-d9ab7ec425';
+const VERSION = 'pdfgw-2e83ccb8f1';
 const FILES = [
  "./",
  "css/app.css",
@@ -21,6 +21,7 @@ const FILES = [
  "js/scan-editor.js",
  "js/scan.js",
  "js/scanner.js",
+ "js/share.js",
  "js/state.js",
  "js/thumbs.js",
  "js/ui.js",
