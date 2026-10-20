@@ -239,15 +239,19 @@ button.del { color: var(--danger); } button.del:hover { background: var(--danger
 .sc-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
 .sc-acts button { padding: 3px 7px; font-size: 12.5px; }
 .sc-acts .prim { flex: 1 1 100%; background: var(--accent-soft); border-color: var(--accent-line); }
-.sc-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 16px rgba(20,24,28,.08); display: grid; gap: 8px; }
-.sc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 1100px; width: 100%; margin: 0 auto; }
+.sc-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border: 1px solid var(--line); border-bottom: 0; border-radius: 14px 14px 0 0; padding: 4px 14px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 22px rgba(20,24,28,.16); display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; max-height: 72vh; overflow-y: auto; overflow-x: hidden; }
+.sc-grip { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; padding: 6px 0 2px; cursor: grab; touch-action: none; user-select: none; color: var(--muted); font-size: 12px; }
+.sc-grip:active { cursor: grabbing; } .sc-grip i { width: 40px; height: 4px; border-radius: 2px; background: var(--line2); }
+.sc-grip button { position: absolute; right: 0; top: 2px; }
+.sc-dock.collapsed > :not(.sc-grip):not(.sc-save) { display: none; }
+.sc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 1100px; width: 100%; min-width: 0; margin: 0 auto; }
 .sc-row .lbl { color: var(--muted); font-size: 12.5px; }
 .sc-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .sc-row select { width: auto; padding: 4px 7px; }
-.sc-filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.sc-filters { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .sc-filters button { padding: 4px 10px; white-space: nowrap; font-size: 12.5px; }
 .sc-filters button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.sc-save { justify-content: flex-end; }
+.sc-save { justify-content: flex-end; } .sc-save button { flex: 1 1 auto; }
 body.sce-open { overflow: hidden; }
 
 /* ---------- full-screen crop & colour editor ---------- */
