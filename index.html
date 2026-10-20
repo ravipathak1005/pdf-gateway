@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PDF Gateway — every PDF job, offline</title>
+<meta name="description" content="Merge, split, edit, sign, fill, redact, compress, scan, OCR and protect PDFs — entirely in your browser. Hindi supported. Nothing is uploaded.">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/pdf-lib.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" id="brandHome" href="#" aria-label="PDF Gateway home">
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M9 7h9l5 5v13H9z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M18 7v5h5M12.5 18h7M12.5 21.5h5" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+    <span class="bname">PDF Gateway</span><small class="bsub">private · works offline</small>
+  </a>
+  <div class="top-actions">
+    <button id="btnHome" class="ghost" data-ic="home"><span>Home</span></button>
+    <button id="btnAdd" class="ghost" data-ic="plus"><span>Add files</span></button>
+    <span class="sep"></span>
+    <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" data-ic="undo"></button>
+    <button id="btnRedo" class="icon" title="Redo (Ctrl+Y)" aria-label="Redo" data-ic="redo"></button>
+    <button id="btnSave" class="primary" data-ic="download"><span>Save PDF</span></button>
+  </div>
+</header>
+
+<main>
+<!-- ===================== HOME / GATEWAY ===================== -->
+<section id="home" class="home">
+  <div class="hero">
+    <h1>Every PDF job, in one place.</h1>
+    <p>Merge, split, edit, sign, fill, redact, compress, scan and protect — right in your browser. Your files never leave this device, and Hindi (देवनागरी) works everywhere.</p>
+    <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Choose PDF or image files">
+      <div class="drop-ic" data-ic="open" data-size="30"></div>
+      <div><strong>Drop PDFs or images here</strong><span>or click to choose files · you can add more any time</span></div>
+      <div class="drop-btns"><button class="primary" id="btnChoose">Choose files</button><button id="btnCamHome" data-ic="camera"><span>Scan with camera</span></button></div>
+    </div>
+  </div>
+  <div id="tiles" class="tiles"></div>
+  <footer class="home-foot">
+    <span data-ic="shield" data-size="16"></span> Everything runs locally in your browser. No uploads, no accounts.
+    <button class="link" id="btnFontsHome">Hindi fonts…</button>
+    <span class="muted" id="verLabel"></span>
+  </footer>
+</section>
+
+<!-- ===================== STUDIO ===================== -->
+<section id="studio" class="studio" hidden>
+  <aside id="thumbsCol" class="col-thumbs" aria-label="Pages">
+    <div class="thumbs-head"><span id="pageCount">0 pages</span></div>
+    <div id="thumbs" class="thumbs"></div>
+  </aside>
+
+  <section class="col-stage">
+    <div class="stagebar">
+      <button class="icon" id="pgPrev" aria-label="Previous page" data-ic="left"></button>
+      <input id="pageNum" type="number" min="1" value="1" aria-label="Page number"><span id="pageTotal" class="muted">/ 1</span>
+      <button class="icon" id="pgNext" aria-label="Next page" data-ic="right"></button>
+      <span class="sep"></span>
+      <button class="icon" id="zOut" aria-label="Zoom out" data-ic="zout"></button>
+      <span id="zoomLabel" class="zl">100%</span>
+      <button class="icon" id="zIn" aria-label="Zoom in" data-ic="zin"></button>
+      <button class="icon" id="zFitW" title="Fit width" aria-label="Fit width" data-ic="fit"></button>
+      <button class="ghost small" id="zFitP">Fit page</button>
+      <span class="grow"></span>
+      <span id="toolBadge" class="badge"></span>
+    </div>
+    <div id="scroller" class="scroller">
+      <div id="pagebox" class="pagebox">
+        <canvas id="base"></canvas>
+        <canvas id="ov"></canvas>
+        <div id="formLayer" class="form-layer"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="col-panel" aria-label="Tools">
+    <nav class="tabs" id="tabs" role="tablist">
+      <button role="tab" data-tab="edit" data-ic="pen" class="on"><span>Edit</span></button>
+      <button role="tab" data-tab="pages" data-ic="grid"><span>Pages</span></button>
+      <button role="tab" data-tab="stamp" data-ic="drop"><span>Stamp</span></button>
+      <button role="tab" data-tab="scan" data-ic="scan"><span>Scan</span></button>
+      <button role="tab" data-tab="export" data-ic="download"><span>Export</span></button>
+    </nav>
+
+    <!-- EDIT -->
+    <div class="pane" data-pane="edit">
+      <div class="tools" id="tools">
+        <button data-tool="select" data-ic="cursor" title="Select / move (V)"><span>Select</span></button>
+        <button data-tool="text" data-ic="text" title="Add text (T)"><span>Text</span></button>
+        <button data-tool="edittext" data-ic="edittext" title="Edit existing text"><span>Edit text</span></button>
+        <button data-tool="form" data-ic="form" title="Fill form fields"><span>Fill form</span></button>
+        <button data-tool="hl" data-ic="highlight" title="Highlight (H)"><span>Highlight</span></button>
+        <button data-tool="rect" data-ic="rect" title="Rectangle (R)"><span>Rectangle</span></button>
+        <button data-tool="ellipse" data-ic="ellipse" title="Ellipse (E)"><span>Ellipse</span></button>
+        <button data-tool="line" data-ic="line" title="Line (L)"><span>Line</span></button>
+        <button data-tool="arrow" data-ic="arrow" title="Arrow (A)"><span>Arrow</span></button>
+        <button data-tool="pen" data-ic="pen" title="Freehand (P)"><span>Draw</span></button>
+        <button data-tool="white" data-ic="white" title="Whiteout"><span>Whiteout</span></button>
+        <button data-tool="redact" data-ic="redact" title="Redact (permanent)"><span>Redact</span></button>
+        <button data-tool="sign" data-ic="sign" title="Signature (S)"><span>Sign</span></button>
+        <button data-tool="stamp" data-ic="stamp" title="Stamp"><span>Stamp</span></button>
+        <button id="btnInsertImg" data-ic="image" title="Insert image"><span>Image</span></button>
+        <button data-tool="crop" data-ic="crop" title="Crop page"><span>Crop</span></button>
+      </div>
+      <p class="tool-hint" id="toolHint"></p>
+      <div class="props" id="props">
+        <div class="pg" data-for="stroke"><label class="field inline">Colour <input type="color" id="pColor"></label><label class="field inline grow">Width <input type="range" id="pSw" min="1" max="14" step="0.5"></label></div>
+        <div class="pg" data-for="fill"><label class="check"><input type="checkbox" id="pFillOn"> Fill</label><input type="color" id="pFill"></div>
+        <div class="pg" data-for="hl"><span class="lbl">Highlighter</span><div class="swatches" id="hlSwatches"></div><input type="color" id="pHl"></div>
+        <div class="pg" data-for="text">
+          <label class="field inline grow">Font <select id="pFont"></select></label>
+          <label class="field inline">Size <input type="number" id="pSize" min="4" max="300" step="0.5" style="width:64px"></label>
+          <label class="field inline">Colour <input type="color" id="pTextColor"></label>
+          <label class="check"><input type="checkbox" id="pBold"> B</label><label class="check"><input type="checkbox" id="pItalic"> I</label>
+        </div>
+        <div class="pg" data-for="opacity"><label class="field inline grow">Opacity <input type="range" id="pOpacity" min="0.1" max="1" step="0.05"></label></div>
+        <div class="pg" data-for="stamp"><label class="field inline grow">Stamp <select id="pStamp"></select></label><input type="text" id="pStampText" placeholder="Custom stamp text" style="display:none"></div>
+        <div class="pg" data-for="sign"><button id="btnSig" data-ic="sign"><span>Choose / draw signature…</span></button></div>
+        <div class="pg item-actions" data-for="item">
+          <button id="btnEditText" data-ic="text"><span>Edit text…</span></button>
+          <button id="btnDup" data-ic="copy"><span>Duplicate</span></button>
+          <button id="btnFront" data-ic="up" title="Bring to front"><span>Front</span></button>
+          <button id="btnBack" data-ic="down" title="Send to back"><span>Back</span></button>
+          <button id="btnDel" class="danger" data-ic="trash"><span>Delete</span></button>
+        </div>
+      </div>
+      <details class="fonts"><summary>Hindi / custom fonts</summary>
+        <p class="hint">Text uses <b>Utsaah</b> first, then Mangal / Nirmala UI, whichever your device has. To use another font (e.g. Kruti Dev is <i>not</i> needed — use Unicode), add a .ttf/.otf file once; it is remembered in this browser.</p>
+        <button id="btnAddFont" data-ic="font"><span>Add font file…</span></button>
+        <div id="fontList" class="font-list"></div>
+      </details>
+    </div>
+
+    <!-- PAGES -->
+    <div class="pane" data-pane="pages" hidden>
+      <h3>Select pages</h3>
+      <div class="btn-row"><button id="btnSelAll">All</button><button id="btnSelNone">None</button><button id="btnSelOdd">Odd</button><button id="btnSelEven">Even</button></div>
+      <div class="inline-form"><input id="selRange" placeholder="e.g. 1-3, 5, 8-" aria-label="Page range"><button id="btnSelRange">Select</button></div>
+      <p class="hint">Tip: tick the boxes on the thumbnails, or Ctrl/Shift-click. Drag thumbnails to reorder.</p>
+      <h3>Organize</h3>
+      <div class="btn-grid">
+        <button id="btnRotL" data-ic="rotccw"><span>Rotate left</span></button>
+        <button id="btnRotR" data-ic="rotcw"><span>Rotate right</span></button>
+        <button id="btnMoveUp" data-ic="up"><span>Move earlier</span></button>
+        <button id="btnMoveDown" data-ic="down"><span>Move later</span></button>
+        <button id="btnDupPage" data-ic="copy"><span>Duplicate</span></button>
+        <button id="btnBlank" data-ic="blank"><span>Insert blank</span></button>
+        <button id="btnReverse" data-ic="reverse"><span>Reverse order</span></button>
+        <button id="btnDelPage" class="danger" data-ic="trash"><span>Delete</span></button>
+      </div>
+      <h3>Extract &amp; split</h3>
+      <button id="btnExtract" class="wide" data-ic="download"><span>Save selected pages as new PDF</span></button>
+      <div class="inline-form">
+        <select id="splitMode" aria-label="Split mode">
+          <option value="ranges">By ranges  (1-3, 4-6, 7-)</option>
+          <option value="every">Every N pages</option>
+          <option value="each">Each page separately</option>
+          <option value="sel">Selected pages → one file, rest → another</option>
+        </select>
+      </div>
+      <div class="inline-form"><input id="splitVal" placeholder="1-3, 4-6, 7-" aria-label="Split value"><button id="btnSplit" data-ic="split"><span>Split → ZIP</span></button></div>
+      <h3>Crop</h3>
+      <p class="hint">Use the <b>Crop</b> tool on the page, then copy the same crop to every page.</p>
+      <div class="btn-row"><button id="btnCropAll">Apply this crop to all pages</button><button id="btnCropClear">Clear crop</button></div>
+      <h3>Add more</h3>
+      <button id="btnAdd2" class="wide" data-ic="merge"><span>Add / merge more PDFs or images…</span></button>
+    </div>
+
+    <!-- STAMP -->
+    <div class="pane" data-pane="stamp" hidden>
+      <details open class="sec"><summary><span class="sw-toggle"><input type="checkbox" id="wmOn"><b>Watermark</b></span></summary>
+        <div class="grid2">
+          <label class="field">Type<select id="wmKind"><option value="text">Text</option><option value="image">Image / logo</option></select></label>
+          <label class="field" id="wmTextWrap">Text<input id="wmText" type="text"></label>
+          <button id="wmImgBtn" data-ic="image" hidden><span>Choose image…</span></button>
+          <label class="field" id="wmSizeWrap">Size<input id="wmSize" type="number" min="8" max="300"></label>
+          <label class="field" id="wmScaleWrap" hidden>Width % of page<input id="wmScale" type="number" min="5" max="100"></label>
+          <label class="field">Colour<input id="wmColor" type="color"></label>
+          <label class="field">Opacity<input id="wmOpacity" type="range" min="0.03" max="1" step="0.01"></label>
+          <label class="field">Angle<input id="wmAngle" type="number" min="-180" max="180"></label>
+          <label class="field">Position<select id="wmPos"></select></label>
+          <label class="check"><input type="checkbox" id="wmTile"> Repeat across page</label>
+          <label class="field">Pages<input id="wmRange" type="text" placeholder="all / odd / 1-3,5"></label>
+        </div>
+      </details>
+      <details class="sec"><summary><span class="sw-toggle"><input type="checkbox" id="nmOn"><b>Page numbers</b></span></summary>
+        <div class="grid2">
+          <label class="field wide2">Format<input id="nmFmt" type="text"><small>Use {n} page, {N} total, {date}</small></label>
+          <label class="field">Position<select id="nmPos"></select></label>
+          <label class="field">Size<input id="nmSize" type="number" min="6" max="40"></label>
+          <label class="field">Start at<input id="nmStart" type="number"></label>
+          <label class="field">Pages<input id="nmRange" type="text" placeholder="all"></label>
+          <label class="check wide2"><input type="checkbox" id="nmDev"> Devanagari digits (१ २ ३)</label>
+        </div>
+      </details>
+      <details class="sec"><summary><span class="sw-toggle"><input type="checkbox" id="hdOn"><b>Header</b></span></summary>
+        <div class="grid2"><label class="field wide2">Text<input id="hdText" type="text" placeholder="कार्यालय … / Confidential"></label><label class="field">Position<select id="hdPos"></select></label><label class="field">Size<input id="hdSize" type="number" min="6" max="40"></label></div>
+      </details>
+      <details class="sec"><summary><span class="sw-toggle"><input type="checkbox" id="ftOn"><b>Footer</b></span></summary>
+        <div class="grid2"><label class="field wide2">Text<input id="ftText" type="text" placeholder="Page {n} of {N}"></label><label class="field">Position<select id="ftPos"></select></label><label class="field">Size<input id="ftSize" type="number" min="6" max="40"></label></div>
+      </details>
+      <p class="hint">These are applied to every page (or the pages you pick) when you save — you can see them live on the page.</p>
+    </div>
+
+    <!-- SCAN -->
+    <div class="pane" data-pane="scan" hidden>
+      <h3>Scan &amp; photos</h3>
+      <p class="hint">Photograph documents or add image files, straighten and clean them up, then save as one PDF.</p>
+      <div class="btn-grid">
+        <button id="btnCamera" data-ic="camera"><span>Take photo</span></button>
+        <button id="btnAddImgs" data-ic="images"><span>Add images…</span></button>
+      </div>
+      <button id="btnScanEdit" class="wide primary" data-ic="crop"><span>Crop &amp; enhance this page…</span></button>
+      <h3>All image pages</h3>
+      <label class="field">Filter<select id="scanFilter"><option value="auto">Magic colour</option><option value="gray2">Clean grey</option><option value="bw">Black &amp; white</option><option value="gray">Grayscale</option></select></label>
+      <button id="btnScanAuto" class="wide" data-ic="wand"><span>Auto-detect edges &amp; enhance all</span></button>
+      <p class="hint">Scanned pages have no selectable text — use <b>Export → OCR</b> to make them searchable.</p>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="pane" data-pane="export" hidden>
+      <label class="field">File name<input id="exName" type="text" value="document"></label>
+      <h3>Pages to include</h3>
+      <div class="radios">
+        <label><input type="radio" name="which" value="all" checked> All pages</label>
+        <label><input type="radio" name="which" value="sel"> Selected pages</label>
+        <label><input type="radio" name="which" value="range"> Range <input id="exRange" type="text" placeholder="1-3,5" style="width:90px"></label>
+      </div>
+      <h3>File size</h3>
+      <div class="radios">
+        <label><input type="radio" name="size" value="orig" checked> Original quality</label>
+        <label><input type="radio" name="size" value="target"> Compress to a target size</label>
+      </div>
+      <div id="targetBox" class="grid2" hidden>
+        <label class="field">Target<select id="exTarget"><option value="50">under 50 KB</option><option value="100">under 100 KB</option><option value="200" selected>under 200 KB</option><option value="300">under 300 KB</option><option value="500">under 500 KB</option><option value="1024">under 1 MB</option><option value="2048">under 2 MB</option><option value="custom">Custom…</option></select></label>
+        <label class="field" id="exCustomWrap" hidden>KB<input id="exCustom" type="number" min="10" value="150"></label>
+        <label class="check"><input type="checkbox" id="exGray"> Grayscale</label>
+        <label class="check"><input type="checkbox" id="exBW"> Black &amp; white</label>
+        <p class="hint wide2">Pages are re-rendered as images to reach the size, so text stops being selectable (run OCR to restore it).</p>
+      </div>
+      <details class="sec"><summary><b data-ic="lock" data-size="16"> Password protection</b></summary>
+        <div class="grid2">
+          <label class="field wide2">Password to open<input id="exPw" type="password" autocomplete="new-password" placeholder="leave empty for no open-password"></label>
+          <label class="field wide2">Owner password (to change restrictions)<input id="exOwner" type="password" autocomplete="new-password" placeholder="optional"></label>
+          <label class="check"><input type="checkbox" id="exPrint" checked> Allow printing</label>
+          <label class="check"><input type="checkbox" id="exCopy" checked> Allow copying text</label>
+          <label class="check"><input type="checkbox" id="exModify" checked> Allow editing</label>
+          <label class="check"><input type="checkbox" id="exAnnot" checked> Allow comments</label>
+          <p class="hint wide2">AES-128 encryption. Remember the password — it cannot be recovered. Restrictions are honoured by most readers but are not unbreakable.</p>
+        </div>
+      </details>
+      <details class="sec"><summary><b data-ic="meta" data-size="16"> Document properties</b></summary>
+        <div class="grid2">
+          <label class="field wide2">Title<input id="mdTitle" type="text"></label><label class="field">Author<input id="mdAuthor" type="text"></label><label class="field">Subject<input id="mdSubject" type="text"></label>
+          <label class="field wide2">Keywords<input id="mdKeywords" type="text"></label>
+          <label class="check wide2"><input type="checkbox" id="mdStrip"> Remove all metadata (privacy)</label>
+        </div>
+      </details>
+      <details class="sec"><summary><b data-ic="ocr" data-size="16"> OCR — searchable PDF <em class="tag">beta</em></b></summary>
+        <div class="grid2">
+          <label class="check wide2"><input type="checkbox" id="exOcr"> Make text searchable (OCR)</label>
+          <label class="field">Language<select id="exOcrLang"><option value="eng+hin">English + Hindi</option><option value="hin">Hindi</option><option value="eng">English</option></select></label>
+          <p class="hint wide2">Needs internet the first time (engine ≈ 5 MB + language data), then works offline. Pages become images with an invisible text layer.</p>
+        </div>
+      </details>
+      <button id="btnSavePdf" class="primary wide" data-ic="download"><span>Save PDF</span></button>
+      <h3>Other formats</h3>
+      <div class="inline-form">
+        <select id="exImgFmt"><option value="png">PNG</option><option value="jpg">JPG</option></select>
+        <select id="exImgDpi"><option value="100">100 dpi</option><option value="150" selected>150 dpi</option><option value="200">200 dpi</option><option value="300">300 dpi</option></select>
+        <button id="btnSaveImg" data-ic="images"><span>Pages → Images</span></button>
+      </div>
+      <button id="btnSaveTxt" class="wide" data-ic="filetext"><span>Extract text → .txt</span></button>
+      <p class="hint" id="exInfo"></p>
+    </div>
+  </aside>
+</section>
+</main>
+
+<input type="file" id="fileIn" multiple accept=".pdf,application/pdf,image/*" hidden>
+<input type="file" id="imgIn" accept="image/*" hidden>
+<input type="file" id="camIn" accept="image/*" capture="environment" hidden>
+<input type="file" id="fontIn" accept=".ttf,.otf,.woff,.woff2" hidden>
+<input type="file" id="wmImgIn" accept="image/*" hidden>
+
+<div id="busy" class="busy" hidden role="alert" aria-live="assertive"><div class="busy-card"><div id="busyMsg">Working…</div><div class="bar"><i id="busyBar"></i></div></div></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="fileBanner" class="file-banner" hidden>This page was opened as a local file. Please open it through a web address (GitHub Pages, or run <code>run-local.bat</code>) so the PDF engine can load.</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
