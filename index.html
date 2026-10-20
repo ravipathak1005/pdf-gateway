@@ -20,7 +20,7 @@
     <span class="bname">PDF Gateway</span><small class="bsub">private · works offline</small>
   </a>
   <div class="top-actions">
-    <button id="btnHome" class="ghost" data-ic="home"><span>Home</span></button>
+    <button id="btnHome" class="ghost" data-ic="home"><span>Projects</span></button>
     <button id="btnAdd" class="ghost" data-ic="plus"><span>Add files</span></button>
     <span class="sep"></span>
     <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" data-ic="undo"></button>
@@ -38,15 +38,57 @@
     <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Choose PDF or image files">
       <div class="drop-ic" data-ic="open" data-size="30"></div>
       <div><strong>Drop PDFs or images here</strong><span>or click to choose files · you can add more any time</span></div>
-      <div class="drop-btns"><button class="primary" id="btnChoose">Choose files</button><button id="btnCamHome" data-ic="camera"><span>Scan with camera</span></button></div>
+      <div class="drop-btns"><button class="primary" id="btnChoose">Choose files</button><button id="btnCamHome" data-ic="camera"><span>Scan documents</span></button></div>
     </div>
   </div>
+  <section id="projectsBox" class="projects" hidden>
+    <div class="proj-head">
+      <h2>Your projects</h2>
+      <span class="muted" id="projInfo"></span>
+      <span class="grow"></span>
+      <button id="btnTrash" class="ghost" data-ic="trash"><span>Trash <b id="trashN"></b></span></button>
+      <button id="btnNewScan" class="ghost" data-ic="scan"><span>New scan</span></button>
+    </div>
+    <div id="projList" class="proj-grid"></div>
+    <label class="privacy"><input type="checkbox" id="clearExit"> Privacy: clear all saved projects when I close the app <small class="muted">(projects are stored only in this browser)</small></label>
+  </section>
   <div id="tiles" class="tiles"></div>
   <footer class="home-foot">
     <span data-ic="shield" data-size="16"></span> Everything runs locally in your browser. No uploads, no accounts.
     <button class="link" id="btnFontsHome">Hindi fonts…</button>
     <span class="muted" id="verLabel"></span>
   </footer>
+</section>
+
+<!-- ===================== SCANNER ===================== -->
+<section id="scanner" class="scanner" hidden>
+  <div class="sc-bar">
+    <button id="scBack" class="ghost" data-ic="left"><span>Projects</span></button>
+    <input id="scName" type="text" value="Scan" aria-label="Scan name" maxlength="80">
+    <span id="scCount" class="muted"></span>
+    <span class="grow"></span>
+    <button id="scUndo" class="icon" title="Undo" aria-label="Undo" data-ic="undo"></button>
+  </div>
+  <div class="sc-add">
+    <button id="scCam" class="primary" data-ic="camera"><span>Take photo</span></button>
+    <button id="scAdd" data-ic="images"><span>Add photos</span></button>
+    <button id="scCropAll" data-ic="wand"><span>Auto-crop all</span></button>
+  </div>
+  <div id="scEmpty" class="sc-empty"><b>Scan documents</b><p>Take photos or add pictures of pages. Each one is straightened and cleaned automatically; you can then fine-tune the crop and colour of any page.</p></div>
+  <div id="scGrid" class="sc-grid"></div>
+  <div class="sc-dock">
+    <div class="sc-row"><span class="lbl">Colour (all pages)</span><div id="scFilters" class="sc-filters"></div></div>
+    <div class="sc-row">
+      <label>Page size <select id="scSize"><option value="a4">A4 (fit)</option><option value="orig">As scanned</option></select></label>
+      <label>File size <select id="scQual"><option value="high">Best quality</option><option value="bal">Balanced</option><option value="small">Smallest</option></select></label>
+      <label class="chk"><input type="checkbox" id="scOcr"> Searchable text (OCR)</label>
+    </div>
+    <div class="sc-row sc-save">
+      <button id="scSavePdf" class="primary" data-ic="download"><span>Save PDF</span></button>
+      <button id="scSaveImg" data-ic="images"><span>Save images</span></button>
+      <button id="scEditor" data-ic="pen"><span>Open in editor</span></button>
+    </div>
+  </div>
 </section>
 
 <!-- ===================== STUDIO ===================== -->
@@ -84,7 +126,6 @@
       <button role="tab" data-tab="edit" data-ic="pen" class="on"><span>Edit</span></button>
       <button role="tab" data-tab="pages" data-ic="grid"><span>Pages</span></button>
       <button role="tab" data-tab="stamp" data-ic="drop"><span>Stamp</span></button>
-      <button role="tab" data-tab="scan" data-ic="scan"><span>Scan</span></button>
       <button role="tab" data-tab="export" data-ic="download"><span>Export</span></button>
     </nav>
 
@@ -208,21 +249,6 @@
       <p class="hint">These are applied to every page (or the pages you pick) when you save — you can see them live on the page.</p>
     </div>
 
-    <!-- SCAN -->
-    <div class="pane" data-pane="scan" hidden>
-      <h3>Scan &amp; photos</h3>
-      <p class="hint">Photograph documents or add image files, straighten and clean them up, then save as one PDF.</p>
-      <div class="btn-grid">
-        <button id="btnCamera" data-ic="camera"><span>Take photo</span></button>
-        <button id="btnAddImgs" data-ic="images"><span>Add images…</span></button>
-      </div>
-      <button id="btnScanEdit" class="wide primary" data-ic="crop"><span>Crop &amp; enhance this page…</span></button>
-      <h3>All image pages</h3>
-      <label class="field">Filter<select id="scanFilter"><option value="auto">Magic colour</option><option value="gray2">Clean grey</option><option value="bw">Black &amp; white</option><option value="gray">Grayscale</option></select></label>
-      <button id="btnScanAuto" class="wide" data-ic="wand"><span>Auto-detect edges &amp; enhance all</span></button>
-      <p class="hint">Scanned pages have no selectable text — use <b>Export → OCR</b> to make them searchable.</p>
-    </div>
-
     <!-- EXPORT -->
     <div class="pane" data-pane="export" hidden>
       <label class="field">File name<input id="exName" type="text" value="document"></label>
@@ -288,6 +314,8 @@
 <input type="file" id="camIn" accept="image/*" capture="environment" hidden>
 <input type="file" id="fontIn" accept=".ttf,.otf,.woff,.woff2" hidden>
 <input type="file" id="wmImgIn" accept="image/*" hidden>
+<input type="file" id="scFileIn" multiple accept="image/*" hidden>
+<input type="file" id="scCamIn" multiple accept="image/*" capture="environment" hidden>
 
 <div id="busy" class="busy" hidden role="alert" aria-live="assertive"><div class="busy-card"><div id="busyMsg">Working…</div><div class="bar"><i id="busyBar"></i></div></div></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>

@@ -4,6 +4,11 @@ Everything runs in your browser. Files never leave your device.
 
 **Covers:** merge · split · extract · reorder · rotate · delete · duplicate · blank pages · crop · edit existing text (cover & retype) · add text (Hindi/Devanagari shaped correctly) · highlight / shapes / lines / arrows / pen · signatures (draw or upload) · stamps (incl. सत्यापित / प्रमाणित / प्राप्त) · watermark · page numbers · header/footer · redaction (true removal) · fill forms · images → PDF · PDF → images/text · camera/photo scanner with auto edge-detect + enhance · compress to a target size · password protect (AES-128) · unlock · optional OCR.
 
+## Projects & Scanner (v1.1)
+* **Projects:** every job is saved automatically in this browser (IndexedDB) and listed on the home screen — Open, Rename, Duplicate, Delete. Deleted projects go to **Trash** for 7 days (restore or erase early). Projects never leave the device and do not sync between devices/browsers.
+* **Privacy switch:** "clear all saved projects when I close the app" erases everything when the app is closed (done at close where the browser allows, and again at the next start).
+* **Scanner:** a separate, small flow (photos → crop → colour → save PDF/images). Full-screen crop editor with loupe and edge handles; colour presets plus brightness, contrast, shadow removal, sharpen and B&W level. "Open in editor" hands the scan to the full PDF editor.
+
 ## Run
 The app uses ES modules, so it must be served over http(s) — double-clicking index.html (file://) will not work.
 
