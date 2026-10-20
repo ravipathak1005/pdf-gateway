@@ -1,7 +1,5 @@
 // Scan enhancement: 4-corner perspective crop, auto edge detection, document filters.
-import { S, edit, pushHist, emit } from './state.js';
-import { fitA4, addCanvasSource } from './pdfio.js';
-import { h, modal, toast, debounce } from './ui.js';
+import { addCanvasSource } from './pdfio.js';
 
 const mk = (w, hh) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(hh)); return c; };
 
@@ -62,7 +60,7 @@ function warp(srcC, q, W, H) {
 }
 
 // ---- filters ----------------------------------------------------------------------------
-function normalizeIllumination(id) {
+function normalizeIllumination(id, k = 1) {
   // estimate paper colour by block-max pooling, smooth by upscaling, then divide it out
   const { width: W, height: H, data: d } = id;
   const B = Math.max(12, Math.round(Math.max(W, H) / 48));
@@ -81,26 +79,47 @@ function normalizeIllumination(id) {
   bgc.drawImage(small, 0, 0, W, H);
   const bd = bgc.getImageData(0, 0, W, H).data;
   for (let i = 0; i < d.length; i += 4) {
-    for (let c = 0; c < 3; c++) d[i + c] = Math.min(255, d[i + c] * 255 / Math.max(70, bd[i + c]));
+    for (let c = 0; c < 3; c++) { const v = d[i + c], n = Math.min(255, v * 255 / Math.max(70, bd[i + c])); d[i + c] = v + (n - v) * k; }
   }
 }
 function levels(d, lo, hi) { const k = 255 / (hi - lo); for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, (d[i + c] - lo) * k)); }
 
-export function applyFilter(id, { filter = 'auto', bright = 0, contrast = 0, thr = 0 } = {}) {
+export const FILTERS = [['auto', 'Magic colour'], ['photo', 'Vivid photo'], ['orig', 'Original'], ['gray', 'Grayscale'], ['gray2', 'Clean grey'], ['bw', 'Black & white']];
+export const SHADOW_DEF = { auto: 100, gray2: 100, bw: 100, photo: 45, gray: 0, orig: 0 };
+export const shadowOf = p => p.shadow ?? SHADOW_DEF[p.filter || 'auto'] ?? 0;
+export const defParams = (filter = 'auto') => ({ rot: 0, quad: null, filter, bright: 0, contrast: 0, thr: 0, shadow: undefined, sharp: 0 });
+
+function sharpen(id, amount) {
+  const { width: W, height: H, data: d } = id, a = amount / 100 * 0.9;
+  const src = new Uint8ClampedArray(d);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const o = (y * W + x) * 4;
+    for (let c = 0; c < 3; c++) {
+      const v = src[o + c] * (1 + 4 * a) - a * (src[o + c - 4] + src[o + c + 4] + src[o + c - W * 4] + src[o + c + W * 4]);
+      d[o + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+    }
+  }
+}
+
+export function applyFilter(id, p = {}) {
+  const { filter = 'auto', bright = 0, contrast = 0, thr = 0, sharp = 0 } = p;
   const d = id.data;
-  if (filter === 'auto' || filter === 'bw' || filter === 'gray2') { normalizeIllumination(id); }
+  const sh = shadowOf(p) / 100;
+  if (sh > 0) normalizeIllumination(id, sh);
   if (filter === 'auto') levels(d, 25, 245);
+  if (filter === 'photo') levels(d, 10, 250);
   if (filter === 'gray' || filter === 'bw' || filter === 'gray2') {
     for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
   }
   if (filter === 'gray2') levels(d, 30, 235);
-  if (filter === 'bw') {
-    const t = 168 + thr;
-    for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = d[i] > t ? 255 : 0;
-  }
+  if (sharp > 0 && filter !== 'bw') sharpen(id, sharp);
   if (bright || contrast) {
     const k = 1 + contrast / 100, add = bright * 1.28;
     for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, (d[i + c] - 128) * k + 128 + add));
+  }
+  if (filter === 'bw') {
+    const t = 168 + thr;
+    for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = d[i] > t ? 255 : 0;
   }
   return id;
 }
@@ -164,102 +183,10 @@ export function detectQuad(img, rot = 0) {
   return q.map(([x, y]) => [x + (cx - x) * 0.012, y + (cy - y) * 0.012]);
 }
 
-// ---- editor dialog ------------------------------------------------------------------------
-const FILTERS = [['auto', 'Magic colour'], ['orig', 'Original'], ['gray', 'Grayscale'], ['gray2', 'Clean grey'], ['bw', 'Black & white']];
 
-export async function openScanEditor(pageIdx) {
-  const pg = S.pages[pageIdx];
-  if (!pg?.src) return;
-  const cur = S.sources.get(pg.src.sid);
-  if (cur.kind !== 'img') { toast('Scan tools work on image pages (photos / scans). Convert this page to an image first.', 'warn'); return; }
-  const origSid = pg.scan?.orig ?? pg.src.sid;
-  const orig = S.sources.get(origSid);
-  const P = pg.scan?.params ? JSON.parse(JSON.stringify(pg.scan.params)) : { rot: 0, quad: [[0.02, 0.02], [0.98, 0.02], [0.98, 0.98], [0.02, 0.98]], filter: 'auto', bright: 0, contrast: 0, thr: 0 };
-
-  const MAXV = 520;
-  const srcCv = h('canvas', { class: 'scan-src' }), resCv = h('canvas', { class: 'scan-res' });
-  let wc = workCanvas(orig.img, P.rot, 1400);
-  let drag = -1;
-  const layout = () => {
-    wc = workCanvas(orig.img, P.rot, 1400);
-    const s = Math.min(MAXV / wc.width, MAXV / wc.height, 1);
-    srcCv.width = Math.round(wc.width * s); srcCv.height = Math.round(wc.height * s);
-    drawSrc(); updatePreview();
-  };
-  const drawSrc = () => {
-    const g = srcCv.getContext('2d');
-    g.clearRect(0, 0, srcCv.width, srcCv.height);
-    g.drawImage(wc, 0, 0, srcCv.width, srcCv.height);
-    const pts = P.quad.map(([x, y]) => [x * srcCv.width, y * srcCv.height]);
-    g.fillStyle = 'rgba(0,0,0,.45)';
-    g.beginPath(); g.rect(0, 0, srcCv.width, srcCv.height); g.moveTo(...pts[0]); for (let i = 3; i >= 0; i--) g.lineTo(...pts[i]); g.closePath(); g.fill('evenodd');
-    g.strokeStyle = '#2dd4bf'; g.lineWidth = 2; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(...p) : g.moveTo(...p)); g.closePath(); g.stroke();
-    pts.forEach(p => { g.fillStyle = '#fff'; g.beginPath(); g.arc(p[0], p[1], 9, 0, 7); g.fill(); g.strokeStyle = '#0f766e'; g.lineWidth = 3; g.stroke(); });
-  };
-  const updatePreview = debounce(() => {
-    const out = processScan(orig.img, P, 700);
-    resCv.width = out.width; resCv.height = out.height;
-    resCv.getContext('2d').drawImage(out, 0, 0);
-  }, 60);
-  const ptr = e => { const r = srcCv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
-  srcCv.addEventListener('pointerdown', e => {
-    const [x, y] = ptr(e); let bi = -1, bd = 0.06;
-    P.quad.forEach((q, i) => { const dd = Math.hypot(q[0] - x, q[1] - y); if (dd < bd) { bd = dd; bi = i; } });
-    drag = bi; if (bi >= 0) srcCv.setPointerCapture(e.pointerId);
-  });
-  srcCv.addEventListener('pointermove', e => { if (drag < 0) return; const [x, y] = ptr(e); P.quad[drag] = [Math.max(0, Math.min(1, x)), Math.max(0, Math.min(1, y))]; drawSrc(); updatePreview(); });
-  srcCv.addEventListener('pointerup', () => { drag = -1; });
-
-  const auto = () => { const q = detectQuad(orig.img, P.rot); if (q) { P.quad = q; drawSrc(); updatePreview(); } else toast('Could not find the page edges — drag the corners by hand.', 'warn'); };
-  const reset = () => { P.quad = [[0, 0], [1, 0], [1, 1], [0, 1]]; drawSrc(); updatePreview(); };
-
-  const slider = (label, key, min, max) => {
-    const out = h('span', { class: 'val' }, String(P[key]));
-    const inp = h('input', { type: 'range', min, max, value: P[key], oninput: () => { P[key] = +inp.value; out.textContent = inp.value; updatePreview(); } });
-    return h('label', { class: 'field row-slider' }, h('span', {}, label), inp, out);
-  };
-  const filterSel = h('select', { onchange: e => { P.filter = e.target.value; updatePreview(); } }, FILTERS.map(([v, l]) => h('option', { value: v, selected: v === P.filter }, l)));
-  const body = h('div', { class: 'scan-modal' },
-    h('div', { class: 'scan-views' },
-      h('figure', {}, srcCv, h('figcaption', {}, 'Drag the four corners onto the page edges')),
-      h('figure', {}, resCv, h('figcaption', {}, 'Result preview'))),
-    h('div', { class: 'scan-controls' },
-      h('div', { class: 'btn-row' },
-        h('button', { onclick: auto }, 'Auto-detect edges'), h('button', { onclick: reset }, 'Whole image'),
-        h('button', { onclick: () => { P.rot = (P.rot + 1) % 4; P.quad = [[0.02, 0.02], [0.98, 0.02], [0.98, 0.98], [0.02, 0.98]]; layout(); } }, 'Rotate 90°')),
-      h('label', { class: 'field' }, h('span', {}, 'Filter'), filterSel),
-      slider('Brightness', 'bright', -60, 60), slider('Contrast', 'contrast', -60, 60), slider('B&W threshold', 'thr', -60, 60)));
-  setTimeout(() => { layout(); if (!pg.scan?.params) { const q = detectQuad(orig.img, P.rot); if (q) { P.quad = q; drawSrc(); updatePreview(); } } }, 0);
-  const r = await modal({ title: 'Crop & enhance scan', body, width: 1040, buttons: [{ label: 'Cancel', value: false }, { label: 'Apply to this page', value: true, primary: true }], cancelValue: false });
-  if (!r) return false;
+/** Process the original photo with P and store the result as a new image source. Returns {sid, w, h}. */
+export async function buildScanSource(orig, P, quality) {
   const out = processScan(orig.img, P, 2400);
-  const ns = await addCanvasSource(orig.name.replace(/\.[^.]+$/, '') + '-scan.jpg', out, P.filter === 'bw' ? 0.8 : 0.9);
-  edit(() => {
-    const f = fitA4(out.width, out.height);
-    const page = S.pages[pageIdx];
-    page.src = { sid: ns[0].src.sid, idx: 0 }; page.w = f.w; page.h = f.h; page.scan = { orig: origSid, params: P };
-  });
-  return true;
-}
-
-/** Auto-crop (edge detection) + enhance every image page. */
-export async function autoScanAll(filter = 'auto', progress) {
-  let n = 0;
-  pushHist(); // one undo step for the whole batch
-  const idxs = S.pages.map((p, i) => i).filter(i => S.pages[i].src && S.sources.get(S.pages[i].src.sid).kind === 'img');
-  for (let k = 0; k < idxs.length; k++) {
-    const i = idxs[k], pg = S.pages[i];
-    progress?.(`Enhancing ${k + 1}/${idxs.length}`, k / idxs.length);
-    const origSid = pg.scan?.orig ?? pg.src.sid, orig = S.sources.get(origSid);
-    const quad = detectQuad(orig.img, 0) || [[0, 0], [1, 0], [1, 1], [0, 1]];
-    const P = { rot: 0, quad, filter, bright: 0, contrast: 0, thr: 0 };
-    const out = processScan(orig.img, P, 2400);
-    const ns = await addCanvasSource(orig.name.replace(/\.[^.]+$/, '') + '-scan.jpg', out, 0.88);
-    const f = fitA4(out.width, out.height);
-    { const page = S.pages[i]; page.src = { sid: ns[0].src.sid, idx: 0 }; page.w = f.w; page.h = f.h; page.scan = { orig: origSid, params: P }; }
-    emit('all');
-    n++;
-    await new Promise(r => setTimeout(r));
-  }
-  return n;
+  const ns = await addCanvasSource(orig.name.replace(/\.[^.]+$/, '') + '-scan.jpg', out, quality ?? (P.filter === 'bw' ? 0.8 : 0.9));
+  return { sid: ns[0].src.sid, w: out.width, h: out.height };
 }

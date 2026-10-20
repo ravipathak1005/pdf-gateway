@@ -3,7 +3,6 @@ import { S, edit, pushHist, emit, subscribe, uid, newPage, parseRanges, curPage,
 import { V, STAMPS, setTool, selectedItem, setProp, setFillOn, deleteSelected, duplicateSelected, arrange, editTextItem, signatureDialog, insertImageFile, goto } from './viewer.js';
 import { BASE_FONTS, userFonts } from './prims.js';
 import { buildPdf, buildToSize, renderPagesToImages, extractTextOf, download, zipFiles } from './export.js';
-import { openScanEditor, autoScanAll } from './scan.js';
 import { createOcr } from './ocr.js';
 import { removePages } from './thumbs.js';
 import { addFontFile, removeFont } from './fonts.js';
@@ -96,16 +95,6 @@ export function initPanels() {
 
   // ---------------------------------------------------------------- stamp pane
   initStampPane();
-
-  // ---------------------------------------------------------------- scan pane
-  $('#btnCamera').onclick = () => $('#camIn').click();
-  $('#btnAddImgs').onclick = () => $('#fileIn').click();
-  $('#btnScanEdit').onclick = () => openScanEditor(S.cur);
-  $('#btnScanAuto').onclick = async () => {
-    busy('Enhancing…', 0);
-    try { const n = await autoScanAll($('#scanFilter').value, (m, f) => busy(m, f)); toast(n ? `Enhanced ${n} page(s).` : 'No image pages to enhance.', n ? 'ok' : 'warn'); }
-    catch (e) { console.error(e); toast('Enhance failed: ' + e.message, 'error'); } finally { busy(false); }
-  };
 
   // ---------------------------------------------------------------- export pane
   $$('input[name=size]').forEach(r => r.addEventListener('change', () => { $('#targetBox').hidden = $('input[name=size]:checked').value !== 'target'; }));

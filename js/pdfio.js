@@ -33,7 +33,7 @@ function hasEncryptKey(bytes) {
 /** Ask-for-password hook, set by the UI. */
 export const hooks = { askPassword: async () => null, progress: () => {} };
 
-export async function addPdfSource(name, bytes) {
+export async function addPdfSource(name, bytes, fixedSid) {
   const lib = await getPdfjs();
   const encrypted = hasEncryptKey(bytes);
   let usedPw = '';
@@ -47,7 +47,7 @@ export async function addPdfSource(name, bytes) {
     usedPw = pw; update(pw);
   };
   const pdf = await task.promise;
-  const sid = uid();
+  const sid = fixedSid ?? uid();
   const src = { id: sid, name, kind: 'pdf', bytes, pdf, numPages: pdf.numPages, encrypted, password: usedPw, libDoc: undefined };
   S.sources.set(sid, src);
   const pages = [];
@@ -65,13 +65,13 @@ export async function addPdfSource(name, bytes) {
   return pages;
 }
 
-export async function addImageSource(name, bytes, mime) {
+export async function addImageSource(name, bytes, mime, fixedSid) {
   const blob = new Blob([bytes], { type: mime });
   const url = URL.createObjectURL(blob);
   const img = new Image();
   img.src = url;
   try { await img.decode(); } catch { URL.revokeObjectURL(url); throw new Error('Cannot read image ' + name); }
-  const sid = uid();
+  const sid = fixedSid ?? uid();
   S.sources.set(sid, { id: sid, name, kind: 'img', bytes, mime, url, img, w: img.naturalWidth, h: img.naturalHeight });
   const f = fitA4(img.naturalWidth, img.naturalHeight);
   return [newPage({ src: { sid, idx: 0 }, w: f.w, h: f.h })];

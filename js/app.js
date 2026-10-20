@@ -5,12 +5,15 @@ import { initViewer, setTool, refresh, goto, zoomBy, setZoomMode, V, deleteSelec
 import { initThumbs } from './thumbs.js';
 import { initPanels, setTab, savePdf, fillFontSelect, syncStampInputs } from './panels.js';
 import { initFonts, addFontFile } from './fonts.js';
-import { openScanEditor } from './scan.js';
+import { initScanner, showScanner, addPhotos } from './scanner.js';
+import { initProjects, newProject, openProject, flushSave, P as PROJ } from './projects.js';
+import { initProjectsUI, refreshProjects } from './projects-ui.js';
 import { $, $$, h, hydrateIcons, icon, toast, busy, modal, baseName } from './ui.js';
 
-const VERSION = '1.0';
+const VERSION = '1.1';
 let view = 'home';
 let pendingAct = null;
+let freshNext = false;   // next picked files start a brand-new project (true when chosen from the home screen)
 
 // ------------------------------------------------------------------ home tiles
 const TILES = [
@@ -53,7 +56,7 @@ const ACTS = {
   sign: { tab: 'edit', tool: 'sign' }, form: { tab: 'edit', tool: 'form' }, redact: { tab: 'edit', tool: 'redact' },
   watermark: { tab: 'stamp', open: '#wmOn' }, numbers: { tab: 'stamp', open: '#nmOn' },
   img2pdf: { tab: 'pages', accept: 'image', hint: 'Add images, drag them into order, then Save PDF.' },
-  scan: { tab: 'scan', camera: true }, pdf2img: { tab: 'export', focus: '#btnSaveImg' }, pdf2txt: { tab: 'export', focus: '#btnSaveTxt' },
+  pdf2img: { tab: 'export', focus: '#btnSaveImg' }, pdf2txt: { tab: 'export', focus: '#btnSaveTxt' },
   ocr: { tab: 'export', open: '#exOcr', check: '#exOcr', hint: 'Tick “Make text searchable”, then Save PDF.' },
   compress: { tab: 'export', size: 'target', hint: 'Pick a target size, then Save PDF.' },
   protect: { tab: 'export', open: '#exPw', focus: '#exPw' },
@@ -71,14 +74,10 @@ function buildTiles() {
 }
 
 function startAct(act) {
+  if (act === 'scan') { newScan(); return; }
   const a = ACTS[act];
-  if (!S.pages.length) {
-    pendingAct = act;
-    if (a.camera) $('#camIn').click();
-    else { const fi = $('#fileIn'); fi.accept = a.accept === 'image' ? 'image/*' : '.pdf,application/pdf,image/*'; fi.click(); }
-    return;
-  }
-  applyAct(act);
+  pendingAct = act; freshNext = view === 'home';
+  const fi = $('#fileIn'); fi.accept = a.accept === 'image' ? 'image/*' : '.pdf,application/pdf,image/*'; fi.click();
 }
 function applyAct(act) {
   const a = ACTS[act]; if (!a) return;
@@ -90,39 +89,50 @@ function applyAct(act) {
   if (a.size === 'target') { const r = $('input[name=size][value=target]'); r.checked = true; r.dispatchEvent(new Event('change')); }
   if (a.focus) setTimeout(() => $(a.focus)?.focus(), 50);
   if (a.hint) toast(a.hint, 'info', 6500);
-  if (a.camera) $('#camIn').click();
 }
 
 // ------------------------------------------------------------------ views
-function showHome() { view = 'home'; $('#home').hidden = false; $('#studio').hidden = true; $('#btnSave').hidden = true; $('#btnUndo').hidden = $('#btnRedo').hidden = true; $('#btnHome').hidden = true; window.scrollTo(0, 0); updateHomeHint(); }
+function setView(v) {
+  view = v;
+  $('#home').hidden = v !== 'home'; $('#studio').hidden = v !== 'studio'; $('#scanner').hidden = v !== 'scanner';
+  const ed = v === 'studio';
+  $('#btnSave').hidden = !ed; $('#btnUndo').hidden = $('#btnRedo').hidden = !ed; $('#btnHome').hidden = v === 'home'; $('#btnAdd').hidden = !ed;
+  document.querySelector('.top-actions .sep').hidden = !ed;
+  window.scrollTo(0, 0);
+}
+async function showHome() { await flushSave(); setView('home'); refreshProjects(); }
 function showStudio() {
   if (!S.pages.length) { showHome(); return; }
-  view = 'studio'; $('#home').hidden = true; $('#studio').hidden = false; $('#btnSave').hidden = false; $('#btnUndo').hidden = $('#btnRedo').hidden = false; $('#btnHome').hidden = false;
-  refresh(true);
+  setView('studio'); refresh(true);
 }
-function updateHomeHint() {
-  const has = S.pages.length > 0;
-  $('#btnHome').hidden = true;
-  const bc = $('#btnBackToDoc');
-  if (has && !bc) $('.hero').append(h('button', { id: 'btnBackToDoc', class: 'primary', style: { marginTop: '14px' }, onclick: showStudio }, `Back to your document (${S.pages.length} page${S.pages.length > 1 ? 's' : ''})`));
-  if (!has && bc) bc.remove();
-  if (has && bc) bc.textContent = `Back to your document (${S.pages.length} page${S.pages.length > 1 ? 's' : ''})`;
+async function newScan() {
+  await newProject('scan'); setView('scanner'); showScanner();
 }
+async function openProj(id) {
+  if (id === PROJ.id && S.pages.length) { PROJ.kind === 'scan' ? (setView('scanner'), showScanner()) : showStudio(); return; }
+  busy('Opening project…');
+  try {
+    const kind = await openProject(id);
+    if (kind === 'scan') { setView('scanner'); showScanner(); } else { showStudio(); setTab('edit'); }
+  } catch (e) { console.error(e); toast('Could not open this project: ' + (e?.message || e), 'error', 7000); } finally { busy(false); }
+}
+const updateHomeHint = () => {};
 
 // ------------------------------------------------------------------ file intake
-async function intake(files, { camera = false } = {}) {
+async function intake(files, { fresh = false } = {}) {
   files = [...files].filter(f => f && f.size >= 0);
   if (!files.length) return;
+  if (view === 'scanner') { await addPhotos(files); return; }
   busy('Opening files…');
-  const before = S.pages.length;
   try {
+    if (fresh) await newProject('edit');
+    const before = S.pages.length;
     const { added, errors } = await loadFiles(files);
     if (errors.length) toast(errors.join('\n'), 'error', 8000);
     if (!added) return;
-    if (!$('#exName').dataset.touched) { $('#exName').value = baseName(files[0].name) + (before ? '' : '-edited'); }
+    if (!$('#exName').dataset.touched || fresh) { $('#exName').value = baseName(files[0].name) + (before ? '' : '-edited'); delete $('#exName').dataset.touched; }
     showStudio();
     if (pendingAct) { const a = pendingAct; pendingAct = null; applyAct(a); }
-    if (camera) { busy(false); await openScanEditor(S.cur); }
   } finally { busy(false); }
 }
 
@@ -170,26 +180,25 @@ async function init() {
   initFonts().then(() => { fillFontSelect(); }).catch(() => {});
 
   // file inputs
-  $('#fileIn').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; e.target.accept = '.pdf,application/pdf,image/*'; if (f.length) intake(f); else pendingAct = null; });
-  $('#camIn').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) intake(f, { camera: true }); else pendingAct = null; });
+  $('#fileIn').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; e.target.accept = '.pdf,application/pdf,image/*'; const fr = freshNext; freshNext = false; if (f.length) intake(f, { fresh: fr }); else pendingAct = null; });
   $('#fontIn').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const n = await addFontFile(f); fillFontSelect(); toast('Font added: ' + n + ' — saved in this browser.', 'ok'); } catch { toast('That file is not a usable font.', 'error'); } });
   $('#exName').addEventListener('input', () => { $('#exName').dataset.touched = 1; });
-  const choose = () => { $('#fileIn').accept = '.pdf,application/pdf,image/*'; $('#fileIn').click(); };
+  const choose = () => { freshNext = view === 'home'; $('#fileIn').accept = '.pdf,application/pdf,image/*'; $('#fileIn').click(); };
   $('#btnChoose').onclick = e => { e.stopPropagation(); choose(); };
-  $('#btnCamHome').onclick = e => { e.stopPropagation(); $('#camIn').click(); };
+  $('#btnCamHome').onclick = e => { e.stopPropagation(); newScan(); };
   $('#dropZone').addEventListener('click', choose);
   $('#dropZone').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
   $('#btnAdd').onclick = choose; $('#btnAdd2').onclick = choose;
-  $('#btnFontsHome').onclick = () => { if (S.pages.length) { showStudio(); setTab('edit'); const d = $('.fonts'); d.open = true; } else $('#fontIn').click(); };
+  $('#btnFontsHome').onclick = () => $('#fontIn').click();
 
   // drag & drop anywhere
   let depth = 0;
   window.addEventListener('dragenter', e => { if (e.dataTransfer?.types?.includes('Files')) { depth++; $('#dropZone').classList.add('over'); } });
   window.addEventListener('dragleave', e => { if (e.dataTransfer?.types?.includes('Files') && --depth <= 0) { depth = 0; $('#dropZone').classList.remove('over'); } });
   window.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
-  window.addEventListener('drop', e => { if (e.dataTransfer?.files?.length) { e.preventDefault(); depth = 0; $('#dropZone').classList.remove('over'); intake(e.dataTransfer.files); } });
+  window.addEventListener('drop', e => { if (e.dataTransfer?.files?.length) { e.preventDefault(); depth = 0; $('#dropZone').classList.remove('over'); intake(e.dataTransfer.files, { fresh: view === 'home' }); } });
   // paste images
-  window.addEventListener('paste', e => { const f = [...(e.clipboardData?.files || [])]; if (f.length && !typing(e)) intake(f); });
+  window.addEventListener('paste', e => { const f = [...(e.clipboardData?.files || [])]; if (f.length && !typing(e)) intake(f, { fresh: view === 'home' }); });
 
   // top bar
   $('#brandHome').onclick = e => { e.preventDefault(); showHome(); };
@@ -203,16 +212,20 @@ async function init() {
   $('#zFitW').onclick = () => setZoomMode('width'); $('#zFitP').onclick = () => setZoomMode('page');
 
   document.addEventListener('keydown', onKey);
-  window.addEventListener('beforeunload', e => { if (S.pages.length && S.hist.length) { e.preventDefault(); e.returnValue = ''; } });
 
   subscribe(() => {
     $('#btnUndo').disabled = !S.hist.length; $('#btnRedo').disabled = !S.fut.length;
     if (!S.pages.length && view === 'studio') showHome();
-    if (view === 'home') updateHomeHint();
   });
-  showHome();
+  await initProjects();
+  initScanner({
+    back: () => showHome(),
+    toEditor: () => { PROJ.kind = 'edit'; showStudio(); setTab('edit'); },
+  });
+  initProjectsUI({ open: openProj, newScan });
+  await showHome();
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-  window.PG = { S, V, intake, savePdf, setTab, setTool, showStudio, showHome }; // handy for debugging/testing
+  window.PG = { S, V, intake, savePdf, setTab, setTool, showStudio, showHome, newScan, openProj, PROJ }; // handy for debugging/testing
 }
 init();
